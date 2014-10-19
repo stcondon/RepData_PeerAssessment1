@@ -1,25 +1,82 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+output: html_document
 ---
+Reproducible Research Peer Assessment 1
+=======================================
 
+First we load the packages we're going to need for this work, in this case 'plyr' and 'ggplot2'. Next, we import the data and get rid of the NA values in the steps category. Once we do that, it's not too hard to get the plot we're looking for.
+```{r}
+library(plyr)
+library(ggplot2)
+library(timeDate)
 
-## Loading and preprocessing the data
+activity <- read.csv("data/activity.csv")
+bad <- is.na(activity$steps)
+activity <- activity[!bad,]
 
+df <- ddply(activity, .(date), colwise(sum))
+barplot(df$steps, main = "Total Steps per Day", xlab = "Days", ylab = "Steps")
+```
 
+###Mean Steps per Day without Imputed Values
+```{r}
+ddply(activity[,-3], .(date), colwise(mean))
+```
 
-## What is mean total number of steps taken per day?
+###Median Steps per Day without Imputed Values
+```{r}
+ddply(activity[,-3], .(date), colwise(median))
+```
 
+###Average Daily Pattern
+Now we want to plot the average daily activity pattern, so we create the relevant data frame
+```{r}
+df <- ddply(activity[-2], .(interval), colwise(mean))
+plot(df, type = "l")
+```
 
+Now we can find the 5-minute interval with the most steps on average across all the days.
+```{r}
+df$interval[grep(max(df$steps), df$steps)]
+```
 
-## What is the average daily activity pattern?
+###Imputation
+To find the number of missing values, (which turn out to be a couple of days missing from the dataset), we find the number of true values in the vector we used to eliminate the NA's in the first place. After that, we have to reimport the dataset, since earlier we excised the missing data. I chose to impute values from the average daily activity pattern we found above for the missing values.
+```{r}
+sum(bad)
+activity <- read.csv('data/activity.csv')
+## if anyone knows a more effective way to do this part, please let me know
+for(row in 1:nrow(activity)) {
+       if(bad[row] == TRUE) {
+              activity$steps[row]<-df$steps[df$interval==activity$interval[row]]
+       }
+}
+```
 
+###New Mean
+Unsurprisingly not really that different at all, (in fact only difference is values for missing days)
+```{r}
+ddply(activity[,-3], .(date), colwise(mean))
+```
 
+###New Median
+As we can see the median table is different, and the reason for that is that in the actual dataset, there was a lot more time where there was absolutely no movement at all, whereas while there were a few 0 values in the average daily pattern, the number paled in comparison to that of the actual data, which results in non-zero medians for our imputed dates.
+```{r}
+ddply(activity[,-3], .(date), colwise(median))
+```
 
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+###Time for the Weekend!
+Now, to distinguish weekend from weekday, we add a category onto the activity frame, and then use it to create our plot.
+```{r}
+weekday <- vector()
+for(row in 1:nrow(activity)) {
+       if(isWeekday(activity$date[row]) == TRUE) {
+              weekday[row] <- "Weekday"
+       } else {
+              weekday[row] <- "Weekend"
+       }
+}
+activity$Weekday <- weekday
+df <- ddply(activity[,-c(2,4)], .(weekday, interval), colwise(mean))
+qplot(interval, steps, data = df, xlab = "Time of Day", geom = "line", facets =  weekday ~ .)
+```
